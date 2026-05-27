@@ -1,0 +1,84 @@
+name: Release & Update README
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version
+        id: version
+        run: echo "tag=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Get Chuck Norris joke
+        id: joke
+        run: |
+          JOKE=$(curl -s https://api.chucknorris.io/jokes/random | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          echo "joke=$JOKE" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: Release ${{ steps.version.outputs.tag }}
+          body: |
+            ## 🚀 Release ${{ steps.version.outputs.tag }}
+
+            **PR:** ${{ github.event.pull_request.title }}
+
+            **Chuck Norris says:** ${{ steps.joke.outputs.joke }}
+
+      - name: Add PR comment with joke
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🤠 **Chuck Norris says:**\n\n> ${{ steps.joke.outputs.joke }}\n\n🎉 Release \`${{ steps.version.outputs.tag }}\` was created!`
+            })
+
+      - name: Update README
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          VERSION="${{ steps.version.outputs.tag }}"
+          JOKE="${{ steps.joke.outputs.joke }}"
+
+          # Escape special chars for sed
+          JOKE_ESCAPED=$(echo "$JOKE" | sed 's/[\/&]/\\&/g')
+          PR_ESCAPED=$(echo "$PR_TITLE" | sed 's/[\/&]/\\&/g')
+
+          sed -i \
+            -e "s/- Version: .*/- Version: $VERSION/" \
+            -e "s/- PR Title: .*/- PR Title: $PR_ESCAPED/" \
+            -e "s/- Chuck Norris Joke: .*/- Chuck Norris Joke: $JOKE_ESCAPED/" \
+            README.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --staged --quiet || git commit -m "docs: update README for release $VERSION [skip ci]"
+          git push
