@@ -23,6 +23,6 @@ npm run dev
 ```
 
 ## Latest Release Info
-- Version: —
-- PR Title: —
-- Chuck Norris Joke: —test change
+- Version: v1.0.1
+- PR Title: test: trigger release workflow
+- Chuck Norris Joke: When Chuck Norris air guitars, you can hear it playing.
